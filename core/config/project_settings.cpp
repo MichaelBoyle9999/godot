@@ -1671,6 +1671,7 @@ ProjectSettings::ProjectSettings() {
 	GLOBAL_DEF("application/config/custom_user_dir_name", "");
 	GLOBAL_DEF("application/config/project_settings_override", "");
 	GLOBAL_DEF("application/config/disable_project_settings_override", false);
+	GLOBAL_DEF(PropertyInfo(Variant::PACKED_STRING_ARRAY, "filesystem/directories/resource_paths"), PackedStringArray());
 
 	GLOBAL_DEF("application/run/main_loop_type", "SceneTree");
 	GLOBAL_DEF("application/config/auto_accept_quit", true);

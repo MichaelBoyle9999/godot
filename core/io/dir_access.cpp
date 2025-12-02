@@ -58,6 +58,72 @@ String DirAccess::_get_root_string() const {
 	}
 }
 
+bool DirAccess::_is_access_path_allowed(const String &p_dir) const {
+	if (_access_type != ACCESS_RESOURCES) {
+		return true;
+	}
+
+	ProjectSettings *ps = ProjectSettings::get_singleton();
+	if (ps == nullptr) {
+		return true;
+	}
+
+	LocalVector<String> allowed_roots;
+	String resource_base = _get_root_path().replace_char('\\', '/').simplify_path();
+	if (!resource_base.is_empty()) {
+		if (!resource_base.ends_with("/")) {
+			resource_base += "/";
+		}
+		allowed_roots.push_back(resource_base);
+	}
+
+	Variant extra_variant = ps->get_setting_with_override("filesystem/directories/resource_paths");
+	if (extra_variant.get_type() == Variant::PACKED_STRING_ARRAY) {
+		PackedStringArray extra_roots = extra_variant;
+		for (int i = 0; i < extra_roots.size(); i++) {
+			String entry = extra_roots[i].strip_edges();
+			if (entry.is_empty()) {
+				continue;
+			}
+
+			String absolute_root;
+			if (entry.begins_with("res://") || entry.begins_with("uid://") || entry.begins_with("user://")) {
+				absolute_root = ps->globalize_path(entry);
+			} else if (!entry.is_absolute_path()) {
+				if (resource_base.is_empty()) {
+					continue;
+				}
+				absolute_root = resource_base.path_join(entry).replace_char('\\', '/');
+			} else {
+				absolute_root = entry;
+			}
+
+			absolute_root = absolute_root.replace_char('\\', '/').simplify_path();
+			if (absolute_root.is_empty()) {
+				continue;
+			}
+			if (!absolute_root.ends_with("/")) {
+				absolute_root += "/";
+			}
+			allowed_roots.push_back(absolute_root);
+		}
+	}
+
+	String normalized_target = p_dir.replace_char('\\', '/').simplify_path();
+	if (!normalized_target.ends_with("/")) {
+		normalized_target += "/";
+	}
+
+	for (int i = 0; i < allowed_roots.size(); i++) {
+		const String &candidate = allowed_roots[i];
+		if (!candidate.is_empty() && normalized_target.begins_with(candidate)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 int DirAccess::get_current_drive() {
 	String path = get_current_dir().to_lower();
 	for (int i = 0; i < get_drive_count(); i++) {

@@ -162,13 +162,12 @@ Error DirAccessWindows::change_dir(String p_dir) {
 	SetCurrentDirectoryW((LPCWSTR)(current_dir.utf16().get_data()));
 	bool worked = (SetCurrentDirectoryW((LPCWSTR)(dir.utf16().get_data())) != 0);
 
-	String base = _get_root_path();
-	if (!base.is_empty()) {
+	if (worked) {
 		str_len = GetCurrentDirectoryW(0, nullptr);
 		real_current_dir_name.resize_uninitialized(str_len + 1);
 		GetCurrentDirectoryW(real_current_dir_name.size(), (LPWSTR)real_current_dir_name.ptrw());
 		String new_dir = String::utf16((const char16_t *)real_current_dir_name.get_data()).trim_prefix(R"(\\?\)").replace_char('\\', '/');
-		if (!new_dir.begins_with(base)) {
+		if (!_is_access_path_allowed(new_dir)) {
 			worked = false;
 		}
 	}
