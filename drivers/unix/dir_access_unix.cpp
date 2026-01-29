@@ -364,12 +364,13 @@ Error DirAccessUnix::change_dir(String p_dir) {
 		return ERR_INVALID_PARAMETER;
 	}
 
-	if (!_is_access_path_allowed(try_dir)) {
+	String base = _get_root_path();
+	if (!base.is_empty() && !try_dir.begins_with(base)) {
 		ERR_FAIL_NULL_V(getcwd(real_current_dir_name, 2048), ERR_BUG);
 		String new_dir;
 		new_dir.append_utf8(real_current_dir_name);
 
-		if (!_is_access_path_allowed(new_dir)) {
+		if (!new_dir.begins_with(base)) {
 			try_dir = current_dir; //revert
 		}
 	}

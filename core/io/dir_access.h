@@ -72,7 +72,6 @@ protected:
 
 	String _get_root_path() const;
 	virtual String _get_root_string() const;
-	bool _is_access_path_allowed(const String &p_dir) const;
 
 	AccessType get_access_type() const;
 	virtual String fix_path(const String &p_path) const;
