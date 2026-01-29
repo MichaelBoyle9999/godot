@@ -2201,7 +2201,48 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 	initialize_modules(MODULE_INITIALIZATION_LEVEL_CORE);
 	register_core_extensions(); // core extensions must be registered after globals setup and before display
 
-	ResourceUID::get_singleton()->load_from_cache(true); // load UUIDs from cache.
+	#ifdef TOOLS_ENABLED
+		{
+			// If caches are missing in play/project-manager runs, spawn a one-shot headless editor
+			// to perform the full first-scan (global script classes + UID cache) before continuing.
+			// Guard with an env var to avoid recursion.
+			bool cache_warm_guard = OS::get_singleton()->get_environment("GODOT_CACHE_WARMED") == "1";
+			const String project_data_dir = ProjectSettings::get_singleton()->get_project_data_path();
+			const String uid_cache_path = ResourceUID::get_singleton()->get_cache_file();
+			const String script_class_cache_path = project_data_dir.path_join("global_script_class_cache.cfg");
+			bool missing_uid_cache = !FileAccess::exists(uid_cache_path);
+			bool missing_script_class_cache = !FileAccess::exists(script_class_cache_path);
+
+			if (!editor && !project_manager && (missing_uid_cache || missing_script_class_cache) && !cache_warm_guard) {
+				OS::get_singleton()->set_environment("GODOT_CACHE_WARMED", "1");
+
+				List<String> warm_args;
+				warm_args.push_back("--editor");
+				warm_args.push_back("--headless");
+				warm_args.push_back("--quit-after");
+				warm_args.push_back("1");
+				warm_args.push_back("--path");
+				warm_args.push_back(ProjectSettings::get_singleton()->get_resource_path());
+
+				int warm_exit = 0;
+				Error warm_err = OS::get_singleton()->execute(OS::get_singleton()->get_executable_path(), warm_args, nullptr, &warm_exit, true);
+				if (warm_err != OK || warm_exit != 0) {
+					WARN_PRINT("Failed to auto-generate caches via headless editor warmup; proceeding without caches.");
+				}
+			}
+
+			Error uid_cache_err = ResourceUID::get_singleton()->load_from_cache(true); // load UUIDs from cache.
+			// In play/project-manager runs the UID cache may be absent. When that happens, proactively
+			// trigger the editor file-system scan to rebuild the cache so uid:// references resolve.
+			if (uid_cache_err != OK && !editor) {
+				ResourceUID::scan_for_uid_on_startup = EditorFileSystem::scan_for_uid;
+				EditorFileSystem::scan_for_uid();
+				ResourceUID::get_singleton()->save_to_cache();
+			}
+		}
+	#else
+		ResourceUID::get_singleton()->load_from_cache(true); // load UUIDs from cache.
+	#endif
 
 	if (ProjectSettings::get_singleton()->has_custom_feature("dedicated_server")) {
 		audio_driver = NULL_AUDIO_DRIVER;
