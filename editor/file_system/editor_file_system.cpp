@@ -3749,6 +3749,12 @@ void EditorFileSystem::remove_import_format_support_query(Ref<EditorFileSystemIm
 EditorFileSystem::EditorFileSystem() {
 #ifdef THREADS_ENABLED
 	use_threads = true;
+
+	// Allow callers (e.g., headless test harness) to force synchronous scanning.
+	const String env_disable = OS::get_singleton()->get_environment("GODOT_DISABLE_FS_THREADS");
+	if (!env_disable.is_empty()) {
+		use_threads = false;
+	}
 #endif
 
 	ResourceLoader::import = _resource_import;
