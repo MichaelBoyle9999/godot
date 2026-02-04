@@ -31,6 +31,7 @@
 #include "editor_node.h"
 
 #include "core/config/project_settings.h"
+#include "core/config/engine.h"
 #include "core/extension/gdextension_manager.h"
 #include "core/input/input.h"
 #include "core/io/config_file.h"
@@ -5665,12 +5666,23 @@ static String last_progress_state;
 static int last_progress_step = 0;
 static double last_progress_time = 0;
 
+static bool is_quiet_cli_requested() {
+	if (Main::is_quiet_cmdline()) {
+		Engine::get_singleton()->set_print_to_stdout(false);
+		return true;
+	}
+	return !Engine::get_singleton()->is_printing_to_stdout();
+}
+
 void EditorNode::progress_add_task(const String &p_task, const String &p_label, int p_steps, bool p_can_cancel) {
 	if (!singleton) {
 		return;
 	} else if (singleton->cmdline_mode) {
-		print_line_rich(vformat("[   0%% ] [color=gray][b]%s[/b] | Started %s (%d steps)[/color]", p_task, p_label, p_steps));
 		progress_total_steps[p_task] = p_steps;
+		if (is_quiet_cli_requested()) {
+			return;
+		}
+		print_line_rich(vformat("[   0%% ] [color=gray][b]%s[/b] | Started %s (%d steps)[/color]", p_task, p_label, p_steps));
 	} else if (singleton->progress_dialog) {
 		singleton->progress_dialog->add_task(p_task, p_label, p_steps, p_can_cancel);
 	}
@@ -5680,6 +5692,9 @@ bool EditorNode::progress_task_step(const String &p_task, const String &p_state,
 	if (!singleton) {
 		return false;
 	} else if (singleton->cmdline_mode) {
+		if (is_quiet_cli_requested()) {
+			return false;
+		}
 		double current_time = USEC_TO_SEC(OS::get_singleton()->get_ticks_usec());
 		double elapsed_time = current_time - last_progress_time;
 		if (p_task != last_progress_task || p_state != last_progress_state || p_step != last_progress_step || elapsed_time >= 1.0) {
@@ -5705,6 +5720,9 @@ void EditorNode::progress_end_task(const String &p_task) {
 		return;
 	} else if (singleton->cmdline_mode) {
 		progress_total_steps.erase(p_task);
+		if (is_quiet_cli_requested()) {
+			return;
+		}
 		print_line_rich(vformat("[color=green][ DONE ][/color] [b]%s[/b]\n", p_task));
 	} else if (singleton->progress_dialog) {
 		singleton->progress_dialog->end_task(p_task);

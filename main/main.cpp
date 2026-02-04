@@ -198,6 +198,8 @@ String tablet_driver = "";
 String text_driver = "";
 String rendering_driver = "";
 String rendering_method = "";
+static bool quiet_cli_requested = false;
+static bool quiet_cli_checked = false;
 static int text_driver_idx = -1;
 static int audio_driver_idx = -1;
 
@@ -426,7 +428,30 @@ void finalize_theme_db() {
 #define MAIN_PRINT(m_txt)
 #endif
 
+static bool is_quiet_cli_requested() {
+	if (!quiet_cli_checked) {
+		for (const String &arg : OS::get_singleton()->get_cmdline_args()) {
+			if (arg == "-q" || arg == "--quiet") {
+				quiet_cli_requested = true;
+				break;
+			}
+		}
+		quiet_cli_checked = true;
+	}
+	if (quiet_cli_requested) {
+		Engine::get_singleton()->set_print_to_stdout(false);
+	}
+	return quiet_cli_requested;
+}
+
+bool Main::is_quiet_cmdline() {
+	return is_quiet_cli_requested();
+}
+
 void Main::print_header(bool p_rich) {
+	if (is_quiet_cli_requested() || !Engine::get_singleton()->is_printing_to_stdout() || !Engine::get_singleton()->_print_header) {
+		return;
+	}
 	if (GODOT_VERSION_TIMESTAMP > 0) {
 		// Version timestamp available.
 		if (p_rich) {
@@ -1176,9 +1201,16 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 		} else if (arg == "-q" || arg == "--quiet") { // quieter output
 
 			quiet_stdout = true;
+			Engine::get_singleton()->set_print_to_stdout(false);
+			Engine::get_singleton()->_print_header = false;
+			quiet_cli_requested = true;
+			quiet_cli_checked = true;
+			main_args.push_back(arg);
 
 		} else if (arg == "--no-header") {
+
 			Engine::get_singleton()->_print_header = false;
+			main_args.push_back(arg);
 
 		} else if (arg == "--audio-driver") { // audio driver
 
@@ -1445,6 +1477,10 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 
 			audio_driver = NULL_AUDIO_DRIVER;
 			display_driver = NULL_DISPLAY_DRIVER;
+			quiet_cli_requested = true;
+			quiet_cli_checked = true;
+			Engine::get_singleton()->set_print_to_stdout(false);
+			Engine::get_singleton()->_print_header = false;
 
 		} else if (arg == "--embedded") { // Enable embedded mode.
 #ifdef MACOS_ENABLED
@@ -2319,6 +2355,8 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 
 	if (bool(GLOBAL_GET("application/run/disable_stdout"))) {
 		quiet_stdout = true;
+		quiet_cli_requested = true;
+		quiet_cli_checked = true;
 	}
 	if (bool(GLOBAL_GET("application/run/disable_stderr"))) {
 		CoreGlobals::print_error_enabled = false;
@@ -2329,7 +2367,8 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 	}
 
 	if (quiet_stdout) {
-		CoreGlobals::print_line_enabled = false;
+		Engine::get_singleton()->set_print_to_stdout(false);
+		Engine::get_singleton()->_print_header = false;
 	}
 
 	Logger::set_flush_stdout_on_print(GLOBAL_GET("application/run/flush_stdout_on_print"));
@@ -2987,6 +3026,12 @@ Error Main::setup2(bool p_show_boot_logo) {
 
 	Thread::make_main_thread(); // Make whatever thread call this the main thread.
 	set_current_thread_safe_for_nodes(true);
+
+	// Reapply quiet mode in case stdout state changed between setup() and setup2().
+	if (is_quiet_cli_requested()) {
+		Engine::get_singleton()->set_print_to_stdout(false);
+		Engine::get_singleton()->_print_header = false;
+	}
 
 	// Don't use rich formatting to prevent ANSI escape codes from being written to log files.
 	print_header(false);
